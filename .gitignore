@@ -109,7 +109,6 @@ celerybeat.pid
 .venv
 env/
 venv/
-ENV/
 env.bak/
 venv.bak/
 
@@ -145,3 +144,4 @@ RL/log/
 RL/.idea/
 Battery/__pycache__/
 Battery/data/
+RL/requirements.txt
