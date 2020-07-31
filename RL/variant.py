@@ -193,9 +193,9 @@ VARIANT = {
                                 ALG_PARAMS['CAC_Battery']['adaptive_beta']
                                 ),
     # 'evaluate': False,
-     'train': True,
-    # 'train': False, 
-    # 'evaluate' : True,
+     # 'train': True,
+    'train': False, 
+    'evaluate' : True,
 
     'num_of_trials': 1,   # number of random seeds
 

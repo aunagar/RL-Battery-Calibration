@@ -628,7 +628,7 @@ def eval(variant):
     agent_traj=[]
     ground_traj=[]
 
-    for i in tqdm(range(50,60)):
+    for i in tqdm(range(0,50,10)):
         traj = data_trajectories[i]
 
         env.reset()
