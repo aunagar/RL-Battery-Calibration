@@ -12,8 +12,8 @@ np.random.seed(SEED)
 LOAD_MIN = 8
 LOAD_MAX = 8 
 
-qMOBILE_MIN = 7600
-qMOBILE_MAX = 7000
+qMOBILE_MIN = 6000
+qMOBILE_MAX = 7600
 
 def generate_data(num_trajectories, method = 'specialized'):
 	b = Battery()
@@ -21,7 +21,7 @@ def generate_data(num_trajectories, method = 'specialized'):
 	U = []
 	Z = []
 	theta = []
-	for i in tqdm(range(num_trajectories)):
+	for i in tqdm(range(num_trajectories+1)):
 		b.reset()
 		if method == "random":
 			load = np.random.uniform(low = LOAD_MIN, high = LOAD_MAX)
@@ -55,7 +55,7 @@ def generate_data(num_trajectories, method = 'specialized'):
 	# data['Z'] = np.array(Z,dtype=object)
 	# data['theta'] = np.array(theta,dtype=object)
 
-	np.savez("data_50_trajectories_constant_load_8_uniform_q_7000_7600.npz", 
+	np.savez("data_3_trajectories_constant_load_8_uniform_q_6000_7600.npz", 
 		X = np.array(X, dtype = object), U = np.array(U, dtype = object),
 		Z = np.array(Z, dtype = object), theta = np.array(theta, dtype = object))
 	# f = h5py.File('battery.h5','w')
@@ -71,29 +71,29 @@ if __name__ == '__main__':
 	# pool = Pool(processes = 2)
 	# inputs = [2,2]
 	# pool.map(generate_data, inputs)
-	# generate_data(50)
+	generate_data(2)
 
-	def get_data():
-	    process = 'data_50_trajectories_constant_load_8_uniform_q_7000_7600.npz'
-	    data = np.load(process, allow_pickle = True)
-	    state_orig = data['X']
-	    X_orig = data['Z']
-	    W_orig = data['U']
-	    T_orig = data['theta']
+	# def get_data():
+	#     process = 'data_50_trajectories_constant_load_8_uniform_q_7000_7600.npz'
+	#     data = np.load(process, allow_pickle = True)
+	#     state_orig = data['X']
+	#     X_orig = data['Z']
+	#     W_orig = data['U']
+	#     T_orig = data['theta']
 
-	    state = [s[:-1,:] for s in state_orig]
-	    X = [x[:-1,:] for x in X_orig]
-	    X_ = [x[1:, :] for x in X_orig]
-	    W = [w[:-1,:] for w in W_orig]
-	    T = [t.reshape(-1,1)[:-1,:] for t in T_orig]
+	#     state = [s[:-1,:] for s in state_orig]
+	#     X = [x[:-1,:] for x in X_orig]
+	#     X_ = [x[1:, :] for x in X_orig]
+	#     W = [w[:-1,:] for w in W_orig]
+	#     T = [t.reshape(-1,1)[:-1,:] for t in T_orig]
 
-	    data_stack = [np.concatenate((X[i], W[i], X_[i], T[i], state[i]), axis = -1) for i in range(len(X))]
-	    # print(np.shape(data_stack))
-	    return data_stack
+	#     data_stack = [np.concatenate((X[i], W[i], X_[i], T[i], state[i]), axis = -1) for i in range(len(X))]
+	#     # print(np.shape(data_stack))
+	#     return data_stack
 
-	stacked_data = get_data()
+	# stacked_data = get_data()
 
-	for d in stacked_data:
-		plt.plot(list(range(len(d[:,1]))), d[:, 1], color = 'red', linestyle = '-')
-	plt.show()
+	# for d in stacked_data:
+	# 	plt.plot(list(range(len(d[:,1]))), d[:, 1], color = 'red', linestyle = '-')
+	# plt.show()
 	# print(stacked_data[0].shape)

@@ -725,23 +725,6 @@ class BatteryCalib(gym.Env):
         u_tp1 = last_state[1] # next input load
 
         self.model.applyDegradation(qMobile = action[0])
-        # self.model.qMax = action[0]*self.model.qMax
-        # self.model.qpMin = self.model.qMax * self.model.xpMin # min charge at pos electrode
-        # self.model.qpMax = self.model.qMax * self.model.xpMax # max charge at pos electrode
-        # self.model.qpSMin = self.model.qpMin * self.model.VolS / self.model.Vol # min charge at surface, pos electrode
-        # self.model.qpBMin = self.model.qpMin * self.model.VolB / self.model.Vol # min charge at bulk, pos electrode
-        # self.model.qpSMax = self.model.qpMax * self.model.VolS / self.model.Vol # max charge at surface, pos electrode
-        # self.model.qpBMax = self.model.qpMax * self.model.VolB / self.model.Vol # max charge at bulk, pos electrode
-        # self.model.qnMin = self.model.qMax * self.model.xnMin # max charge at neg electrode
-        # self.model.qnMax = self.model.qMax * self.model.xnMax # max charge at neg electrode
-        # self.model.qnSMax = self.model.qnMax * self.model.VolS / self.model.Vol # max charge at surface, neg electrode
-        # self.model.qnBMax = self.model.qnMax * self.model.VolB / self.model.Vol # max charge at bulk, neg electrode
-        # self.model.qnSMin = self.model.qnMin * self.model.VolS / self.model.Vol # min charge at surface, neg electrode
-        # self.model.qnBMin = self.model.qnMin * self.model.VolB / self.model.Vol # min charge at bulk, neg electrode
-        # self.model.qSMax = self.model.qMax * self.model.VolS / self.model.Vol # max charge at surface (pos and neg)
-        # self.model.qBMax = self.model.qMax * self.model.VolB / self.model.Vol # max charge at bulk (pos and neg)
-
-        # self.model.Ro = action[1]*self.model.Ro
 
         x = np.reshape(x, (8,1))
         # apply next load to the current state and find a new state

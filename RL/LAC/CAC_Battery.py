@@ -450,7 +450,7 @@ def train(variant):
         # Random start point
 
         # traj_id = np.random.randint(0, len(data_trajectories))
-        traj_id = np.random.randint(0, 50)
+        traj_id = np.random.randint(0, 3)
         # traj_id = 0
         traj = data_trajectories[traj_id]
         # print(len(traj))
@@ -499,12 +499,12 @@ def train(variant):
             _, r, done, X_ = env.step(action)
             # The new s= current state,next omega, next state
             s_ = np.array([X_[1][0], traj[j, 2], traj[j,4]])
-            if r > 1e-4:
-                r = r*50
-            # if s_[0] < s_[2] :
+            # if r > 1e-4:
                 # r = r*50
-            # elif (r > 1e-4):
-                # r = r*20
+            if s_[0] < s_[2] :
+                r = r*50
+            elif (r > 1e-4):
+                r = r*20
             if j%100 == 0:
                 print("current state: ", s, "true action: ", traj[j, 5], " predicted action: ", action, " and reward : ", r)
 
@@ -628,7 +628,7 @@ def eval(variant):
     agent_traj=[]
     ground_traj=[]
 
-    for i in tqdm(range(0,50,10)):
+    for i in tqdm(range(0,3)):
         traj = data_trajectories[i]
 
         env.reset()
@@ -719,10 +719,11 @@ def eval(variant):
 
     plt.plot(x, PLOT_theta_1, color='blue', label='Tracking')
     plt.plot(x, PLOT_ground_theta_1, color='black',linestyle='--',label='Ground truth')
-    plt.show()
+    plt.savefig(variant['log_path'] + '/action_tracking.jpg')
 
+    fig = plt.figure()
     plt.plot(x, agent_traj, color='blue', label='Tracking')
     plt.plot(x, ground_traj, color='black',linestyle='--',label='Ground truth')
-    plt.show()
+    plt.savefig(variant['log_path'] + '/output_tracking.jpg')
 
     return

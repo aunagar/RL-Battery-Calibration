@@ -61,7 +61,7 @@ def training_evaluation(variant, env, policy):
 
         # Random start point
         # traj_id = np.random.randint(0, len(data_trajectories))
-        traj_id = 10*i
+        traj_id = i
         traj = data_trajectories[traj_id]
 
         # start_point = np.random.randint(0, len(traj))

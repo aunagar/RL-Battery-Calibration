@@ -142,10 +142,10 @@ ALG_PARAMS = {
         'iter_of_disturber_train_per_epoch': 50,
         'memory_capacity': int(1e6),
         'min_memory_size': 10000,
-        'batch_size': 256,
+        'batch_size': 128,
         'labda': 1.,
         'alpha': 2.,
-        'beta':0.,
+        'beta':0.5,
         'alpha3': 1,
         'tau': 5e-3,
         'lr_a': 1e-4,
@@ -171,7 +171,7 @@ ALG_PARAMS = {
 
 VARIANT = {
     'env_name' : 'BatteryCalib',
-    'dataset_name':'data_50_trajectories_constant_load_8_uniform_q_7000_7600.npz',
+    'dataset_name':'data_3_trajectories_constant_load_8_uniform_q_6000_7600.npz',
     # 'env_name':'CMAPSS',
     #training prams
     'algorithm_name' : 'CAC_Battery',
@@ -183,7 +183,7 @@ VARIANT = {
     #  'additional_description': '-bias-0.01',
     # 'additional_description': '-dynamic-noisy-1',
     # 'additional_description': '-new-reward-0.01-noisy-training',
-     'additional_description' : '-data_50_traj_const_W8_uni_q_7000_7600_reward1_{}-{}-{}-{}-{}-{}-{}'.format(
+     'additional_description' : '-data_3_traj_const_W8_uni_q_6000_7600_reward3_{}-{}-{}-{}-{}-{}-{}'.format(
                                 ALG_PARAMS['CAC_Battery']['labda'],
                                 ALG_PARAMS['CAC_Battery']['alpha'],
                                 ALG_PARAMS['CAC_Battery']['beta'],
@@ -193,13 +193,13 @@ VARIANT = {
                                 ALG_PARAMS['CAC_Battery']['adaptive_beta']
                                 ),
     # 'evaluate': False,
-     # 'train': True,
+    # 'train': True,
     'train': False, 
     'evaluate' : True,
 
     'num_of_trials': 1,   # number of random seeds
 
-    'store_last_n_paths': 5,  # number of trajectories for evaluation during training
+    'store_last_n_paths': 3,  # number of trajectories for evaluation during training
     'start_of_trial': 0,
     'eval_list': [
 

@@ -672,7 +672,7 @@ class BatteryCalib(gym.Env):
         self.low = np.array([0., 0., 0.])
         self.high = np.array([high_val, high_val, high_val])
         self.observation_space = spaces.Box(low = self.low, high =self.high)
-        self.action_space = spaces.Box(np.array([7000]), np.array([7600]))
+        self.action_space = spaces.Box(np.array([6000]), np.array([7600]))
         self.seed()
         self.model = Battery()
         self.viewer = None
