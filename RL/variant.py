@@ -12,11 +12,13 @@ ENV_PARAMS = {
         'max_episodes': int(5e6), # Maximum number of episodes for RL training
         'disturbance dim': 8,
         'eval_render': False, },
-    'BatteryCalib' : {
-        'max_ep_steps' : int(512),
-        'max_global_steps' : int(500000),
-        'max_episodes' : int(100000),
-        'eval_render': False }
+    'BatteryTest' : {
+        'max_ep_steps' : int(16),
+        'max_global_steps' : int(2000000),
+        'max_episodes' : int(1000000),
+        'eval_render': False,
+        'action_low' : [5000.,0.10],
+        'action_high' : [8000.,0.20],}
 }
 
 ALG_PARAMS = {
@@ -47,7 +49,6 @@ ALG_PARAMS = {
         'target_entropy': None,
         'history_horizon': 0,  # 0 is using current state only
     },
-
     'CAC': {
         'iter_of_actor_train_per_epoch': 50,
         'iter_of_disturber_train_per_epoch': 50,
@@ -56,7 +57,7 @@ ALG_PARAMS = {
         'batch_size': 256,
         'labda': 1.,
         'alpha': 2.,
-        'beta':0.5,
+        'beta':0.,
         'alpha3': 1,
         'tau': 5e-3,
         'lr_a': 1e-4,
@@ -137,7 +138,7 @@ ALG_PARAMS = {
         'history_horizon': 0,  # 0 is using current state only
     },
 
-    'CAC_Battery': {
+    'CAC_Battery_new': {
         'iter_of_actor_train_per_epoch': 50,
         'iter_of_disturber_train_per_epoch': 50,
         'memory_capacity': int(1e6),
@@ -145,12 +146,42 @@ ALG_PARAMS = {
         'batch_size': 128,
         'labda': 1.,
         'alpha': 2.,
-        'beta':0.5,
+        'beta':0.05,
         'alpha3': 1,
         'tau': 5e-3,
         'lr_a': 1e-4,
         'lr_c': 3e-4,
         'lr_l': 3e-4,
+        'gamma': 0.995,
+        # 'gamma': 0.75,
+        'steps_per_cycle': 1,
+        'train_per_cycle': 1,
+        'use_lyapunov': True,
+        'Time_near': True,
+        'adaptive_alpha': True,
+        'adaptive_beta': False,
+        'approx_value': True,
+        'value_horizon': 20,
+        # 'finite_horizon': True,
+        'finite_horizon': False,
+        'soft_predict_horizon': False,
+        'target_entropy': None,
+        'history_horizon': 0,  # 0 is using current state only
+    },
+    'CAC_Battery': {
+        'iter_of_actor_train_per_epoch': 50,
+        'iter_of_disturber_train_per_epoch': 50,
+        'memory_capacity': int(1e6),
+        'min_memory_size': 10000,
+        'batch_size': 256,
+        'labda': 1.,
+        'alpha': 2.,
+        'beta':0.,
+        'alpha3': 1,
+        'tau': 5e-3,
+        'lr_a': 5e-4,
+        'lr_c': 5e-4,
+        'lr_l': 5e-4,
         'gamma': 0.995,
         # 'gamma': 0.75,
         'steps_per_cycle': 1,
@@ -170,20 +201,23 @@ ALG_PARAMS = {
 }
 
 VARIANT = {
-    'env_name' : 'BatteryCalib',
-    'dataset_name':'data_3_trajectories_constant_load_8_uniform_q_6000_7600.npz',
+    'env_name' : 'BatteryTest',
+    # 'env_name' : 'BatteryCalib',
+    # 'dataset_name': 'data_5_trajectories_const_load_8_uniform_q_3000_7000_dt_1_short.npz',
+    # 'dataset_name':'data_15_trajectories_uniform_load_8_16_uniform_R_0.12_0.20_dt_1_short.npz',
+    'dataset_name' : 'data_18_trajectories_load_8_16_q_6000_7000_R_0.12_0.18_dt_1_short.npz',
+    'num_data_trajectories':18,
+    'reward_id':1, # 1 to 6,
+    'traj_start':"random",
     # 'env_name':'CMAPSS',
     #training prams
     'algorithm_name' : 'CAC_Battery',
     # 'algorithm_name': 'NAC',
      # 'algorithm_name': 'CAC',
     # 'algorithm_name': 'LAC',
-    # 'additional_description': '_submit_policy_fixed_beta_0.5',
-    # 'additional_description': '-new-reward',
-    #  'additional_description': '-bias-0.01',
-    # 'additional_description': '-dynamic-noisy-1',
-    # 'additional_description': '-new-reward-0.01-noisy-training',
-     'additional_description' : '-data_3_traj_const_W8_uni_q_6000_7600_reward3_{}-{}-{}-{}-{}-{}-{}'.format(
+    'additional_description': '-data_18_trajectories_load_8_16_q_6000_7000_R_0.12_0.18_dt_1_reward1-state_short_traj16_bs256_fullstate_{}-{}-{}-{}-{}-{}-{}'.format(
+    #  'additional_description' : '-data_15_traj_uniform_load_8_16_uniform_q_3000_7000_dt_1_reward-new2_short_traj16_bs256_fullstate_{}-{}-{}-{}-{}-{}-{}'.format(
+    #  'additional_description' : '-data_5_traj_const_load_8_uniform_q_3000_7000_dt_1_reward6_short_fulltraj_{}-{}-{}-{}-{}-{}-{}'.format(
                                 ALG_PARAMS['CAC_Battery']['labda'],
                                 ALG_PARAMS['CAC_Battery']['alpha'],
                                 ALG_PARAMS['CAC_Battery']['beta'],
@@ -196,28 +230,24 @@ VARIANT = {
     # 'train': True,
     'train': False, 
     'evaluate' : True,
-
     'num_of_trials': 1,   # number of random seeds
 
-    'store_last_n_paths': 3,  # number of trajectories for evaluation during training
+    'store_last_n_paths': 18,  # number of trajectories for evaluation during training
     'start_of_trial': 0,
     'eval_list': [
 
     ],
     'trials_for_eval': [str(i) for i in range(0, 10)],
 
-    'evaluation_frequency': 25000,
+    'evaluation_frequency': 20000,
 }
 
 VARIANT['log_path']='/'.join(['./log', VARIANT['env_name'], VARIANT['algorithm_name'] + VARIANT['additional_description']])
 
-
-
-
-
 VARIANT['env_params']=ENV_PARAMS[VARIANT['env_name']]
 
 VARIANT['alg_params']=ALG_PARAMS[VARIANT['algorithm_name']]
+VARIANT['alg_params']['seed'] = SEED
 
 RENDER = True
 def get_env_from_name(name):
@@ -227,7 +257,11 @@ def get_env_from_name(name):
         env = env.unwrapped
     elif name == 'BatteryCalib':
         from envs.BatteryCalib import BatteryCalib as env
-        env = env()
+        env = env(action_low=ENV_PARAMS[name]['action_low'], action_high=ENV_PARAMS[name]['action_high'])
+        env = env.unwrapped
+    else:
+        from envs.Battery_test import BatteryCalib as env
+        env = env(action_low=ENV_PARAMS[name]['action_low'], action_high=ENV_PARAMS[name]['action_high'])
         env = env.unwrapped
     env.seed(SEED)
     return env
@@ -235,6 +269,8 @@ def get_env_from_name(name):
 def get_train(name):
     if 'LAC' in name:
         from LAC.LAC import train
+    elif 'CAC_Battery_new' in name:
+        from LAC.CAC_Battery_new import train
     elif 'CAC_Battery' in name:
         from LAC.CAC_Battery import train
     elif 'CAC' in name:
@@ -247,7 +283,9 @@ def get_train(name):
     return train
 
 def get_policy(name):
-    if 'CAC_Battery' in name:
+    if 'CAC_Battery_new' in name:
+        from LAC.CAC_Battery_new import CAC as build_func
+    elif 'CAC_Battery' in name:
         from LAC.CAC_Battery import CAC as build_func
     elif 'CAC' in name :
         from LAC.CAC import CAC as build_func
@@ -262,6 +300,8 @@ def get_policy(name):
 def get_eval(name):
     if 'LAC' in name:
         from LAC.LAC import eval
+    elif 'CAC_Battery_new' in name:
+        from LAC.CAC_Battery_new import eval
     elif 'CAC_Battery' in name:
         from LAC.CAC_Battery import eval
     elif 'CAC' in name:

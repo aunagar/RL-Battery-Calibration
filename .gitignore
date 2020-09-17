@@ -143,4 +143,8 @@ RL/log/
 RL/.idea/
 Battery/__pycache__/
 Battery/data/
+RL-torch/data/
+RL-torch/log/
+lsf*
+*.npz
 RL/requirements.txt

@@ -1,14 +1,16 @@
-import tensorflow as tf
 import os
-from variant import *
-
-import numpy as np
 import time
 import logger
-import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
+import numpy as np
 import scipy.io as sio
 from sklearn import preprocessing
 import h5py
+
+from variant import *
+
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from variant import VARIANT
@@ -25,13 +27,13 @@ def get_data():
     X = [x[:-1,:] for x in X_orig]
     X_ = [x[1:, :] for x in X_orig]
     W = [w[:-1,:] for w in W_orig]
-    T = [t.reshape(-1,2)[:-1,:] for t in T_orig]
+    T = [t.reshape(-1,1)[:-1,:] for t in T_orig]
     val_frac = 0.
 
     data_stack = [np.concatenate((X[i], W[i], X_[i], T[i], state[i]), axis = -1) for i in range(int(val_frac*len(X)), len(X))]
     return data_stack
 
-def training_evaluation(variant, env, policy):
+def training_evaluation(variant, env, agent):
 
     env_name = variant['env_name']
     data_trajectories = get_data()
@@ -47,7 +49,7 @@ def training_evaluation(variant, env, policy):
     # Training setting
 
     total_cost = []
-    ref_s = env.reference_state
+
 
     episode_length = []
 
@@ -65,56 +67,45 @@ def training_evaluation(variant, env, policy):
 
         # start_point = np.random.randint(0, len(traj))
         start_point = 0
-        # s = traj[start_point, 1]
-        s = traj[start_point, -8:]
+        s = traj[start_point, 1]
 
         # current state, next omega, desired state
         # this is for decision making
 
-        # s = np.array([s, traj[start_point, 2], traj[start_point, 4]])
-        s = np.array(list(s) + [traj[start_point, 2]] + list(traj[start_point+1, -8:]))
+        s = np.array([s, traj[start_point, 2], traj[start_point, 4]])
         env.state = s
         env.model.state = traj[start_point, -8:]
-        # env.state = env.model.state
         ep_steps = min(len(traj), 3200)
         # ep_steps = min(start_point+max_ep_steps+1, len(traj))
         for j in range(start_point+1, ep_steps):
-            if j%100 == 0:
-                env.reset()
-                s = np.array(list(traj[j-1, -8:]) + [traj[j,2]] + list(traj[j,-8:]))
-                env.state = s
-                env.model.state = traj[j-1, -8:]
+
             if Render:
                 env.render()
-            s = env.state
             # start = time.time()
-            # store_s = s.copy()
-            # store_s[2] = store_s[2] - store_s[0]
-            a = policy.choose_action(s/ref_s, True)
-            # a = policy.choose_action(s, True)
+            store_s = s.copy()
+            store_s[2] = store_s[2] - store_s[0]
+            # a = agent.choose_action(store_s, True)
+            a = agent.act(torch.tensor([s]).float(), True)
             # end = time.time()
             # print(end-start)
 
-            action = a_lowerbound + (a + 1.) * (a_upperbound - a_lowerbound) / 2
+            action = a_lowerbound + (a.detach().numpy() + 1.) * (a_upperbound - a_lowerbound) / 2
             # action = traj[j-1,16]
 
-            s_, r, done, X_ = env.step(action, traj[j,2], traj[j,1])
-            # if (j < 16):
-            #     print(r, action, traj[j,5])
+            _, r, done, X_ = env.step(action)
+
             # The new s= current state,next omega, next state
-            # s_ = np.array([X_[1][0], traj[j, 2], traj[j,4]])
-            s_ = np.array(list(s_) + [traj[j,2]] + list(traj[j+1,-8:]))
+            s_ = np.array([X_[1][0], traj[j, 2], traj[j,4]])
             # s_ = np.array([traj[j,1], traj[j,2], traj[j,4]])
             # s_ = np.concatenate([[s_], [theta]], axis=1)[0]
             # s_ = np.concatenate([X_,[[theta]], [traj[j, 9:]]], axis=1)[0]
             env.state = s_
-            # print(r)
             # theta_pre = theta
             r = modify_reward(r, s, s_, id = variant['reward_id'])
             cost += r
 
 
-            if j == ep_steps - 2:
+            if j == max_ep_steps+start_point - 1:
                 done = True
             s = s_
 

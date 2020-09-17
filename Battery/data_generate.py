@@ -10,40 +10,64 @@ SEED = 20
 np.random.seed(SEED)
 
 LOAD_MIN = 8
-LOAD_MAX = 8 
+LOAD_MAX = 16
+load_breaks = 101
 
-qMOBILE_MIN = 6000
-qMOBILE_MAX = 7600
+qMOBILE_MIN = 4000
+qMOBILE_MAX = 7000
+q_breaks = 501
 
-def generate_data(num_trajectories, method = 'specialized'):
+Ro_min = 0.117215
+Ro_max = 0.117215
+r_breaks = 1
+def generate_data():
 	b = Battery()
 	X = []
 	U = []
 	Z = []
 	theta = []
-	for i in tqdm(range(num_trajectories+1)):
-		b.reset()
-		if method == "random":
-			load = np.random.uniform(low = LOAD_MIN, high = LOAD_MAX)
-			qMobile = np.random.uniform(low = qMOBILE_MIN, high = qMOBILE_MAX)
-		else:
-			load = LOAD_MIN + i*(LOAD_MAX - LOAD_MIN)/num_trajectories
-			qMobile = qMOBILE_MIN + i*(qMOBILE_MAX - qMOBILE_MIN)/num_trajectories
+	num_traj = 0
+	for l in range(load_breaks):
+		load = LOAD_MIN + l*(LOAD_MAX - LOAD_MIN)/(load_breaks-1)
+		for q in range(q_breaks):
+			qMobile = qMOBILE_MIN + q*(qMOBILE_MAX - qMOBILE_MIN)/(q_breaks-1)
+			for r in range(r_breaks):
+				num_traj += 1
+				Ro = Ro_min + r*(Ro_max - Ro_min)/(r_breaks)
+				print("load is ", load, " and qMobile is ", qMobile, " and Ro is ", Ro)
+				b.reset()
+				b.applyDegradation(qMobile = qMobile, Ro = Ro)
 
-		print("load is ", load, " and qMobile is ", qMobile)
-		b.applyDegradation(qMobile = qMobile)
+				Ti, Xi, Ui, Zi = b.simulateToThreshold(default_load = load)
 
-		Ti, Xi, Ui, Zi = b.simulateToThreshold(default_load = load)
+				# t = np.array([qMobile]*len(Ti))
+				t = np.array([[qMobile,Ro]]*len(Ti))
+				print("Initial Xi: ", Xi[:,0])
+				print("Xi", Xi.shape)
+				print("Ui", Ui.shape)
+				print("Zi", Zi.shape)
 
-		t = np.array([qMobile]*len(Ti))
-		print("Initial Xi: ", Xi[:,0])
-		# print("Ui: ", Ui.shape)
-		# print("Zi: ", Zi.shape)
+				l, h = int(0.05*Xi.shape[1]), int(0.95*Xi.shape[1])
+				print(l, h)
+				X.append(Xi[:,l:h].T)
+				U.append(Ui[:,l:h].T)
+				Z.append(Zi[:,l:h].T)
+				theta.append(t[l:h])
+	# for i in tqdm(range(num_trajectories+1)):
+	# 	b.reset()
+	# 	if method == "random":
+	# 		load = np.random.uniform(low = LOAD_MIN, high = LOAD_MAX)
+	# 		qMobile = np.random.uniform(low = qMOBILE_MIN, high = qMOBILE_MAX)
+	# 		Ro = np.random.uniform(low = Ro_min, high = Ro_max)
+	# 	elif method == "specialized":
+	# 		load = LOAD_MIN + i*(LOAD_MAX - LOAD_MIN)/num_trajectories
+	# 		qMobile = qMOBILE_MIN + i*(qMOBILE_MAX - qMOBILE_MIN)/num_trajectories
+	# 		Ro = Ro_min + i*(Ro_max - Ro_min)/num_trajectories
+	# 	elif method == "mixed":
+	# 		load = LOAD_MIN + (i%3)*(LOAD_MAX - LOAD_MIN)/2
+	# 		qMobile = qMOBILE_MIN + (i//3)*(qMOBILE_MAX - qMOBILE_MIN)
+	# 		Ro = Ro_min + (i//3)*(Ro_max - Ro_min)/4
 
-		X.append(Xi.T)
-		U.append(Ui.T)
-		Z.append(Zi.T)
-		theta.append(t)
 
 	data = dict()
 	data['X'] = X
@@ -54,8 +78,9 @@ def generate_data(num_trajectories, method = 'specialized'):
 	# data['U'] = np.array(U,dtype=object)
 	# data['Z'] = np.array(Z,dtype=object)
 	# data['theta'] = np.array(theta,dtype=object)
-
-	np.savez("data_3_trajectories_constant_load_8_uniform_q_6000_7600.npz", 
+	print("Total number of trajectories = ", num_traj)
+	np.savez("data_{}_trajectories_load_{}_{}_q_{}_{}_R_{}_{}_dt_1_short.npz".format(num_traj,
+			LOAD_MIN, LOAD_MAX, qMOBILE_MIN, qMOBILE_MAX, Ro_min, Ro_max), 
 		X = np.array(X, dtype = object), U = np.array(U, dtype = object),
 		Z = np.array(Z, dtype = object), theta = np.array(theta, dtype = object))
 	# f = h5py.File('battery.h5','w')
@@ -71,7 +96,7 @@ if __name__ == '__main__':
 	# pool = Pool(processes = 2)
 	# inputs = [2,2]
 	# pool.map(generate_data, inputs)
-	generate_data(2)
+	generate_data()
 
 	# def get_data():
 	#     process = 'data_50_trajectories_constant_load_8_uniform_q_7000_7600.npz'

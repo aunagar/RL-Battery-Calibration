@@ -665,19 +665,21 @@ class Battery:
 
 class BatteryCalib(gym.Env):
 
-    def __init__(self, action_low = 4000, action_high = 8000):
+    def __init__(self, action_low = [4000,0.10], action_high = [8000,0.20]):
 
         ########## RL model setting
         high_val = 1e5
-        self.low = np.array([0., 0., 0.])
-        self.high = np.array([high_val, high_val, high_val])
+        self.low = np.array([0.]*17)
+        self.high = np.array([high_val]*17)
         self.observation_space = spaces.Box(low = self.low, high =self.high)
-        self.action_space = spaces.Box(np.array([action_low]), np.array([action_high]))
+        self.action_space = spaces.Box(np.array(action_low), np.array(action_high))
         self.seed()
         self.model = Battery()
         self.viewer = None
         self.state = None
         self.steps_beyond_done = None
+        self.reference_state = np.array([292.1, 1., 1., 1., 6840, 760, 4.5600e+03, 506.6667, 20, 
+                                        292.1, 1., 1., 1., 6840, 760, 4.5600e+03, 506.6667])
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -692,21 +694,23 @@ class BatteryCalib(gym.Env):
         x1 = self.model.StateEqn(0, x0, [[u0]], 0*self.model.generateProcessNoise())
         u1 = self.model.InputEqn(1)
         z1 = self.model.OutputEqn(1, x1, [[u1]], 0*self.model.generateSensorNoise())
-        self.state = np.array([z0[1,0], u1[0][0], z1[1,0]]) 
+        # self.state = np.array([z0[1,0], u1[0][0], z1[1,0]]) 
+        self.state = x0
         # print(self.state)
         self.model.state = x0
 
-    def step(self, action):
+    def step(self, action, load = 8., next_obs = 3.):
 
         done = False
         last_state = self.state
 
         x = self.model.state # physical model state
-        z_t = last_state[0] # x_t
-        u_tp1 = last_state[1] # w_t+1
-        z_tp1 = last_state[2] # x_t+1
         
-        self.model.applyDegradation(action[0])
+        # u_tp1 = load
+        u_tp1 = last_state[8]
+        z_tp1 = last_state[-8:]
+        
+        self.model.applyDegradation(qMobile = action[0], Ro = action[1])
 
         x = np.reshape(x, (8,1))
         # apply next load to the current state and find a new state
@@ -714,8 +718,9 @@ class BatteryCalib(gym.Env):
         # predict the observation output from the new state
         z_tp1_predict = self.model.OutputEqn(0, x_new, [[u_tp1]], 0*self.model.generateSensorNoise())
 
-        reward = np.square(z_tp1_predict[1][0] - z_tp1)
-        
+        # reward = np.linalg.norm(z_tp1_predict[1][0] - next_obs)
+        # reward = np.linalg.norm(x_new[:,0] - z_tp1)
+        reward = 0.5*np.linalg.norm(x_new[1:4,0] - z_tp1[1:4]) + 0.5*np.linalg.norm(x_new[4:,0] - z_tp1[4:])
         # if reward > 1e-4:
         #     reward = reward*100
         self.model.state = x_new
@@ -723,7 +728,7 @@ class BatteryCalib(gym.Env):
         if z_tp1_predict[1][0] < self.model.VEOD:
             done = True
 
-        return x_new, reward ,done, z_tp1_predict
+        return x_new[:,0], reward ,done, z_tp1_predict
 
 def test_code():
     # Create battery model

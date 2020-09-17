@@ -39,7 +39,8 @@ def get_data():
     X = [x[:-1,:] for x in X_orig]
     X_ = [x[1:, :] for x in X_orig]
     W = [w[:-1,:] for w in W_orig]
-    T = [t.reshape(-1,1)[:-1,:] for t in T_orig]
+    T = [t.reshape(-1,2)[:-1,:] for t in T_orig]
+    print(T)
     train_frac = 1.0
     data_stack = [np.concatenate((X[i], W[i], X_[i], T[i], state[i]), axis = -1) for i in range(int(train_frac*len(X)))]
     return data_stack
@@ -246,7 +247,7 @@ class CAC(object):
 
         self.sess.run(self.opt, feed_dict)
         labda, alpha, l_error, entropy, a_loss,beta,variance,kl,distance = self.sess.run(self.diagnotics, feed_dict)
-
+        
         return labda, alpha, beta, l_error, entropy, a_loss,beta,variance,kl,distance
 
     def store_transition(self, s, a,d, r, l_r, terminal, s_,_s):
@@ -364,8 +365,9 @@ def train(variant):
     env_name = variant['env_name'] # choose your environment
     env = get_env_from_name(env_name)
 
+    num_data_traj = variant['num_data_trajectories']
+    reward_id = variant['reward_id']
     env_params = variant['env_params']
-
     max_episodes = env_params['max_episodes'] # maximum episodes for RL training
     max_ep_steps = env_params['max_ep_steps'] # number of maximum steps in each episode
     max_global_steps = env_params['max_global_steps']
@@ -410,7 +412,7 @@ def train(variant):
     pool = Pool(pool_params)
     # For analyse
     Render = env_params['eval_render']
-
+    ref_s = env.reference_state
     # Training setting
     t1 = time.time()
     global_step = 0
@@ -450,28 +452,35 @@ def train(variant):
         # Random start point
 
         # traj_id = np.random.randint(0, len(data_trajectories))
-        traj_id = np.random.randint(0, 3)
-        # traj_id = 0
+        traj_id = np.random.randint(0, num_data_traj)
+        # traj_id = 1
         traj = data_trajectories[traj_id]
+        
         # print(len(traj))
-        start_point = np.random.randint(0, len(traj))
-        # start_point = 0
-        s = traj[start_point, 1]
-
+        if variant['traj_start'] == "random":
+            start_point = np.random.randint(0, len(traj)-2)
+        else:
+            start_point = int(variant['traj_start'])
+        # s = traj[start_point, 1]
+        s = traj[start_point, -8:]
         # current state, theta,next w, desired state
         # this is for decision making
         # 16,1,4,16
-        s = np.array([s, traj[start_point, 2], traj[start_point, 4]])
+        # s = np.array([s, traj[start_point, 2], traj[start_point, 4]])
         # print(i, s)
-
+        s = np.array(list(s) + [traj[start_point, 2]] + list(traj[start_point+1,-8:]))
+        # print(s)
         env.state = s
         env.model.state = traj[start_point, -8:]
-        
+        # env.state = env.model.state
+        # ep_steps = len(traj)
         ep_steps = min(start_point+1+max_ep_steps, len(traj))
+        # print("selected traj = ", traj_id, " and length = ", len(traj), " starting = ", start_point, " ep_steps = ", ep_steps)
         for j in range(start_point+1,ep_steps):
             if Render:
                 env.render()
-            delta = np.zeros(3)
+            s = env.state
+            delta = np.zeros(s.shape)
             # ###### NOSIE ##############
 
             # noise = np.random.normal(0, 0.01, 0.01)
@@ -485,45 +494,49 @@ def train(variant):
             # noise = s[0:16]*0.01
             # delta[0:16] = noise
 
-
-            a = policy.choose_action(s+delta)
+            # store_s = s.copy()
+            # store_s[2] = store_s[2]-store_s[0]
+            # a = policy.choose_action(store_s + delta)
+            # print(s, delta)
+            a = policy.choose_action(s/ref_s+delta)
             # print("a: ", a)
             action = a_lowerbound + (a + 1.) * (a_upperbound - a_lowerbound) / 2
             # action = traj[j-1,16]
-            # print("a normalize: " , a)
+            # print("a normalize: " , action)
 
             a_upperbound = env.action_space.high
             a_lowerbound = env.action_space.low
 
             # Run in simulator
-            _, r, done, X_ = env.step(action)
+            s_, r, done, X_ = env.step(action, traj[j,2], traj[j,1])
             # The new s= current state,next omega, next state
-            s_ = np.array([X_[1][0], traj[j, 2], traj[j,4]])
-            # if r > 1e-4:
-                # r = r*50
-            if s_[0] < s_[2] :
-                r = r*50
-            elif (r > 1e-4):
-                r = r*20
-            if j%100 == 0:
-                print("current state: ", s, "true action: ", traj[j, 5], " predicted action: ", action, " and reward : ", r)
+            s_ = np.array(list(s_) + [traj[j+1,2]]+ list(traj[j+1,-8:]))
+            # s_ = np.array([X_[1][0], traj[j, 2], traj[j,4]])
+            # s_ = np.array([traj[j, 1], traj[j, 2], traj[j,4]])
+            r = modify_reward(r, s, s_, reward_id)
+            # print(r)
+            if global_step%100 == 1:
+                print("global step: ", global_step,
+                " true action: ", [traj[j, 5], traj[j,6]], " predicted action: ", action, " and reward : ", r)
 
             # print("new state is : ", s_)
             # s_ = np.concatenate([[s_], [theta]], axis=1)[0]
             # s_ = np.concatenate([X_,[[theta]], [traj[j, 9:]]], axis=1)[0]
             env.state = s_
-
+            # store_s_ = s_.copy()
+            # store_s_[2] = store_s_[2] - store_s_[0]
             # theta_pre=theta
             if training_started:
                 global_step += 1
 
-            if j == max_ep_steps - 1+start_point:
+            if j == ep_steps - 2:
                 done = True
 
             terminal = 1. if done else 0.
 
             if j>start_point+2:
-                pool.store(s, a, np.zeros([1]), np.zeros([1]), r, terminal, s_,_s)
+                pool.store(s/ref_s, a, np.zeros([1]), np.zeros([1]), r, terminal, s_/ref_s,_s/ref_s)
+                # pool.store(store_s, a, np.zeros([1]), np.zeros([1]), r, terminal, store_s_, store__s)
             # policy.store_transition(s, a, disturbance, r,0, terminal, s_)
 
             if pool.memory_pointer > min_memory_size and global_step % steps_per_cycle == 0:
@@ -533,7 +546,7 @@ def train(variant):
                 for _ in range(train_per_cycle):
                     batch = pool.sample(batch_size)
                     labda, alpha, beta, l_loss, entropy, a_loss,beta,action_distance,kl,distance = policy.learn(lr_a_now, lr_c_now, lr_l_now, lr_a_now/10, batch)
-                    if j % 200 == 0:
+                    if global_step % 2000 == 1:
                         print("labda = ", labda, " | alpha = ", alpha, " | beta = ", beta ,  " | l_loss = ", l_loss, " | entropy = ", entropy,
                             " | a_loss = ", a_loss, " | action_distance = ", action_distance )
             if training_started:
@@ -578,15 +591,19 @@ def train(variant):
                 else:
                     print("cost did not improve.")
                     print("avg cost was ", eval_diagnotic['test_return']/eval_diagnotic['test_average_length'])
+                    print("prev best cost is:", Min_cost)
+                    # policy.save_result(log_path)
                 if training_started and global_step % (10*evaluation_frequency) == 0 and global_step > 0:
                     policy.save_result(log_path)
 
             # State Update
             _s=s
             s = s_
-
+            store__s = _s.copy()
+            store__s[2] = store__s[2] - store__s[0]
             # OUTPUT TRAINING INFORMATION AND LEARNING RATE DECAY
             if done:
+                # print("done at ", j)
                 if training_started:
                     last_training_paths.appendleft(current_path)
                 frac = 1.0 - (global_step - 1.0) / max_global_steps
@@ -600,6 +617,7 @@ def train(variant):
     return
 
 def eval(variant):
+    num_data_traj = variant['num_data_trajectories']
     env_name = variant['env_name']
     data_trajectories=get_data()
     env = get_env_from_name(env_name)
@@ -615,7 +633,7 @@ def eval(variant):
     a_lowerbound = env.action_space.low
     print("lower bound = ", a_lowerbound)
     policy = CAC(a_dim, s_dim, policy_params)
-
+    ref_s = env.reference_state
     log_path = variant['log_path'] + '/eval/' + str(0)
     logger.configure(dir=log_path, format_strs=['csv'])
     policy.restore(variant['log_path'] + '/' + str(0)+'/policy')
@@ -624,38 +642,50 @@ def eval(variant):
     t1 = time.time()
     PLOT_theta_1 = []
     PLOT_ground_theta_1 = []
+    PLOT_theta_2 = []
+    PLOT_ground_theta_2 = []
     mst=[]
     agent_traj=[]
     ground_traj=[]
 
-    for i in tqdm(range(0,3)):
+    reward_traj = []
+    for i in tqdm(range(num_data_traj)):
         traj = data_trajectories[i]
 
         env.reset()
         cost = 0
 
-        s = traj[0, 1]
-        PLOT_state = np.array([s])
-        s = np.array([s, traj[0, 2], traj[0, 4]])
+        # s = traj[0, 1]
+        s = traj[0, -8:]
+        # PLOT_state = np.array([s])
+        # s = np.array([s, traj[0, 2], traj[0, 4]])
+        s = np.array(list(s) + [traj[0,2]] + list(traj[1,-8:]))
         print("initial state : ", s)
-        print("action here is : ", traj[0,5])
+        print("action here is : ", [traj[0,5], traj[0,6]])
         env.state = s
         env.model.state = traj[0, -8:]
+        # env.state = env.model.state
 
         ep_steps = len(traj)
         for j in range(1,ep_steps):
+            # if j%100 == 0:
+            #     env.reset()
+            #     s = np.array(list(traj[j-1, -8:]) + [traj[j,2]] + list(traj[j,-8:]))
+            #     # s = traj[j-1,-8:]
+            #     env.state = s
+            #     env.model.state = traj[j-1, -8:]
+            s = env.state
+            # if agent_traj == []:
+            #     agent_traj = [s[0]]
+            # else:
+            #     agent_traj = np.concatenate((agent_traj, [s[0]]),axis=0)
 
-            if agent_traj == []:
-                agent_traj = [s[0]]
-            else:
-                agent_traj = np.concatenate((agent_traj, [s[0]]),axis=0)
-
-            if ground_traj == []:
-                ground_traj = [traj[j-1,1]]
-            else:
-                ground_traj = np.concatenate((ground_traj, [traj[j-1,1]]),axis=0)
-
-            delta = np.zeros(3)
+            # if ground_traj == []:
+            #     ground_traj = [traj[j-1,1]]
+            # else:
+            #     ground_traj = np.concatenate((ground_traj, [traj[j-2,4]]),axis=0)
+            # print(traj[j,1], s[2])
+            delta = np.zeros(s.shape)
             # ###### NOSIE ##############
 
             # noise = np.random.normal(0, 0.001, 16)
@@ -665,36 +695,66 @@ def eval(variant):
 
             # noise = s[0:16]*0.005
             # delta[0:16] = noise
-
-            a = policy.choose_action(s+delta,True)
+            # store_s = s.copy()
+            # store_s[2] = store_s[2] - store_s[0]
+            # a = policy.choose_action(store_s + delta, True)
+            a = policy.choose_action(s/ref_s+delta,True)
+            # a = policy.choose_action(s + delta, True)
             # print(a)
             action = a_lowerbound + (a + 1.) * (a_upperbound - a_lowerbound) / 2
             # print(action)
 
-            _, r, done, X_ = env.step(action)
-            if (j%200 == 0):
-                print("X predicted ", X_, " and actual: ", traj[j-1, 4])
-                print("predicted action : ", action, ", reward : ", r )
-
+            s_, r, done, X_ = env.step(action, traj[j,2], traj[j,1])
+            # _, r, done , X_= env.step(action, True)
             # print(r)
             # The new s= current state,next omega, next state
-            s_ = np.array([X_[1,0], traj[j, 2], traj[j, 4]])
+            # s_ = np.array([X_[1,0], traj[j, 2], traj[j, 4]])
+            s_ = np.array(list(s_) + [traj[j+1,2]] + list(traj[j+1,-8:]))
+            # s_ = np.array([traj[j,1], traj[j,2], traj[j,4]])
+            r = modify_reward(r, s, s_, variant['reward_id'])
+            # s_ = np.array([traj[j,1], traj[j,2], traj[j,4]])
+            if (j%51 == 0):
+                # print("X predicted ", X_, " and actual: ", traj[j-1, 4])
+                print("predicted action : ", action, ", reward : ", r )
 
+            if agent_traj == []:
+                # agent_traj = [s_[0]]
+                agent_traj = [X_[1,0]]
+            else:
+                # agent_traj = np.concatenate((agent_traj, [s_[0]]),axis=0)
+                agent_traj = np.concatenate((agent_traj, [X_[1,0]]),axis=0)
+
+            if ground_traj == []:
+                # ground_traj = [s[2]]
+                ground_traj = [traj[j,1]]
+            else:
+                # ground_traj = np.concatenate((ground_traj, [s[2]]),axis=0)
+                ground_traj = np.concatenate((ground_traj, [traj[j,1]]), axis = 0)
             env.state = s_
 
             theta = action
             PLOT_theta_1.append(theta[0])
             PLOT_ground_theta_1.append(traj[j, 5])
+            PLOT_theta_2.append(theta[1])
+            PLOT_ground_theta_2.append(traj[j, 6])
             mst.append(np.linalg.norm(traj[j, 5] - theta[0]))
+            reward_traj.append(r)
 
-            PLOT_state = np.vstack((PLOT_state, np.array([X_[1,0]])))
+            # PLOT_state = np.vstack((PLOT_state, np.array([X_[1,0]])))
 
             logger.logkv('rewards', r)
             logger.logkv('timestep', j)
+            logger.logkv('total-length', ep_steps)
+            logger.logkv('state', s)
+            logger.logkv('predicted-output', X_[1,0])
+            logger.logkv('predicted-action', action)
+            logger.logkv('actual-action', [traj[j, 5],traj[j,6]])
+            logger.logkv('action-error', np.linalg.norm(traj[j, 5:7] - theta))
+            # logger.logkv('output-error', np.linalg.norm(s[0] - traj[j-1,1]))
             logger.dumpkvs()
 
             cost=cost+r
-            if j == len(traj)-1:
+            if j == len(traj)-2:
                 done = True
 
             s = s_
@@ -719,11 +779,76 @@ def eval(variant):
 
     plt.plot(x, PLOT_theta_1, color='blue', label='Tracking')
     plt.plot(x, PLOT_ground_theta_1, color='black',linestyle='--',label='Ground truth')
-    plt.savefig(variant['log_path'] + '/action_tracking.jpg')
+    # plt.ylim(1000, 8000)
+    plt.ylim(2000, 8000)
+    plt.savefig(variant['log_path'] + '/action_tracking_1.jpg')
+
+    plt.plot(x, PLOT_theta_2, color='blue', label='Tracking')
+    plt.plot(x, PLOT_ground_theta_2, color = 'black', linestyle = '--', label='Ground Truth')
+    plt.ylim(0.10, 0.20)
+    plt.savefig(variant['log_path'] + '/action_tracking_2.jpg')
+
 
     fig = plt.figure()
     plt.plot(x, agent_traj, color='blue', label='Tracking')
     plt.plot(x, ground_traj, color='black',linestyle='--',label='Ground truth')
     plt.savefig(variant['log_path'] + '/output_tracking.jpg')
 
+    fig = plt.figure()
+    plt.scatter(np.array(reward_traj), np.square(agent_traj - ground_traj))
+    plt.xlabel("reward")
+    plt.ylabel("error")
+    plt.savefig(variant['log_path'] + '/reward_vs_error.jpg')
     return
+
+def modify_reward(r, s = None, s_ = None, id = 1):
+    if id == 1:
+        r = r
+    if id == 2:
+        if r > 1e-4:
+            r = r*50
+        else:
+            r = r
+    if id == 3:
+        if s_[0] < s_[2]:
+            r =  r*50
+        elif (r > 1e-4):
+            r =  r*20
+        else:
+            r = r
+    if id == 4:
+        if s_[0] < s_[2] :
+            r = np.exp(r)*50
+        elif (r > 1e-4):
+            r = np.exp(r)*20
+        else:
+            r = r
+    if id == 5:
+        if s[0] < s[2]:
+            if s_[0] > s_[2]:
+                r = r
+            else:
+                r = np.exp(r)*20
+        else:
+            if s_[0] < s_[2]:
+                r = np.exp(r)*50
+            elif (r > 1e-4):
+                r = np.exp(r)*20
+            else:
+                r = r
+    if id == 6:
+        if s[0] < s[2]:
+            if s_[0] < s_[2]:
+                r = r*20
+        else:
+            if s_[0] < s_[2]:
+                r = r*50
+            elif (r > 1e-4):
+                r = r*20
+    if id == 7:
+        if r > 1e-4:
+            r = r*20
+        else:
+            r = -r*20
+
+    return r

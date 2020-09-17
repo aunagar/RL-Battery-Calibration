@@ -94,4 +94,7 @@ def hard_update(target, source):
 def stop_grad(network):
     for param in network.parameters():
         param.requires_grad = False
-    
+
+def start_grad(network):
+    for param in network.parameters():
+        param.requires_grad = True

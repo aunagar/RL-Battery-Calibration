@@ -17,41 +17,15 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 # module imports
-from .utils import set_seed, hard_update, soft_update, stop_grad, evaluate_training_rollouts
+from model import Actor, LyapunovCritic
+from utils import set_seed, hard_update, soft_update, stop_grad, start_grad, evaluate_training_rollouts
 from variant import *
-from pool.pool import Pool
+from pool import Pool
 from train_eval import training_evaluation
 
-# Fixed Parameters
-# SCALE_DIAG_MIN_MAX = (-20,-2.5)
-SCALE_DIAG_MIN_MAX = (-20,2)
 SCALE_lambda_MIN_MAX = (0, 1)
 SCALE_beta_MIN_MAX = (0, 1)
 SCALE_alpha_MIN_MAX = (0.01, 1)
-
-# Activation mapping
-str_to_activation = {
-    'elu': nn.ELU(),
-    'hardshrink': nn.Hardshrink(),
-    'hardtanh': nn.Hardtanh(),
-    'leakyrelu': nn.LeakyReLU(),
-    'logsigmoid': nn.LogSigmoid(),
-    'prelu': nn.PReLU(),
-    'relu': nn.ReLU(),
-    'relu6': nn.ReLU6(),
-    'rrelu': nn.RReLU(),
-    'selu': nn.SELU(),
-    'sigmoid': nn.Sigmoid(),
-    'softplus': nn.Softplus(),
-    'logsoftmax': nn.LogSoftmax(),
-    'softshrink': nn.Softshrink(),
-    'softsign': nn.Softsign(),
-    'tanh': nn.Tanh(),
-    'tanhshrink': nn.Tanhshrink(),
-    'softmin': nn.Softmin(),
-    'softmax': nn.Softmax(dim=1),
-    'none': None
-    }
 
 def get_data():
     process = VARIANT['dataset_name']
@@ -69,120 +43,6 @@ def get_data():
     train_frac = 1.0
     data_stack = [np.concatenate((X[i], W[i], X_[i], T[i], state[i]), axis = -1) for i in range(int(train_frac*len(X)))]
     return data_stack
-
-def initialize_weights(initializer):
-    def initialize(m):
-        if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
-            print("Initializing...")
-            initializer(m.weight)
-            if m.bias is not None:
-                torch.nn.init.constant_(m.bias, 0.0)
-    return initialize
-
-class BaseNetwork(torch.nn.Module):
-
-    def save(self, path):
-        torch.save(self.state_dict(), path)
-
-    def load(self, path):
-        self.load_state_dict(torch.load(path))
-
-class Actor(BaseNetwork):
-
-    def __init__(self, input_dim, output_dim, n_layers, layer_sizes, hidden_activation = "relu",
-                output_activation = None, bias = True):
-        super(Actor, self).__init__()
-        assert n_layers == len(layer_sizes), "length of layer_sizes should matches n_layers"
-        model = []
-        prev_dim = input_dim
-        
-        for h in layer_sizes:
-            model.append(nn.Linear(prev_dim, h, bias = bias))
-            model.append(str_to_activation[hidden_activation])
-            prev_dim = h
-        
-        # output layer
-        model.append(nn.Linear(prev_dim, output_dim*2, bias = bias))
-        self.model = nn.Sequential(*model).apply(initialize_weights(torch.nn.init.kaiming_uniform_))
-
-    def forward(self, states):
-
-        mu, log_sigma = torch.chunk(self.model(states.float()), 2, dim = -1)
-        log_sigma = torch.clamp(log_sigma, min = SCALE_DIAG_MIN_MAX[0], max = SCALE_DIAG_MIN_MAX[1])
-
-        sigma = log_sigma.exp()
-
-        distr = torch.distributions.Normal(mu,sigma)
-
-        raw_actions = distr.rsample()
-        clipped_actions = torch.tanh(raw_actions)
-
-        # log probs 
-        log_probs = distr.log_prob(raw_actions) - torch.log(1 - clipped_actions.pow(2) + 1e-6)
-        log_probs = log_probs.sum(1, keepdim = True)
-        #clipped mu
-        clipped_mu = torch.tanh(mu)
-
-        return clipped_actions, clipped_mu, log_probs, distr
-
-
-    # def forward(self, states):
-
-    #     encoder = self.model(states.float())
-    #     mu = nn.Linear(self.prev_dim, self.output_dim)(encoder)
-    #     log_sigma = nn.Linear(self.prev_dim, self.output_dim)(encoder)
-    #     log_sigma = torch.clamp(log_sigma, min = SCALE_DIAG_MIN_MAX[0], max = SCALE_DIAG_MIN_MAX[1])
-    #     # print("mu = ", mu, " sigma = ", log_sigma)
-    #     sigma = log_sigma.exp()
-    #     base_distr = torch.distributions.multivariate_normal.MultivariateNormal(
-    #                     loc = torch.zeros(self.output_dim),
-    #                     covariance_matrix = torch.diag(torch.ones(self.output_dim)))
-
-    #     epsilon = base_distr.rsample()
-    #     affine_transform = torch.distributions.transforms.AffineTransform(loc = mu, scale = sigma)
-    #     tanh_transform = torch.distributions.transforms.TanhTransform()
-
-    #     raw_action = mu + epsilon*sigma
-    #     clipped_action = torch.tanh(raw_action)
-    #     orig_distr = torch.distributions.multivariate_normal.MultivariateNormal(
-    #                     loc = mu,
-    #                     covariance_matrix = torch.diag(sigma).reshape(-1,1))
-    #     transformed_distr= torch.distributions.transformed_distribution.TransformedDistribution(
-    #         base_distr, [affine_transform, tanh_transform]
-    #     )
-    #     clipped_mu = torch.tanh(mu)
-    #     log_pis = transformed_distr.log_prob(clipped_action)
-    #     return clipped_action, clipped_mu, log_pis, orig_distr
-
-class LyapunovCritic(BaseNetwork):
-    def __init__(self, state_dim, action_dim, output_dim, n_layers, layer_sizes, hidden_activation = "relu",
-                output_activation = None, bias = True):
-        super(LyapunovCritic, self).__init__()
-        assert n_layers == len(layer_sizes), "length of layer_sizes should matches n_layers"
-        model = []
-        self.ll1 = nn.Linear(state_dim, layer_sizes[0], bias = False)
-        self.ll2 = nn.Linear(action_dim, layer_sizes[0], bias = False)
-        self.bias = torch.autograd.Variable(torch.zeros(1, layer_sizes[0]), requires_grad = True)
-        self.ll1.apply(initialize_weights(nn.init.kaiming_normal_))
-        self.ll2.apply(initialize_weights(nn.init.kaiming_normal_))
-        prev_dim = layer_sizes[0]
-        self.hidden_activation = hidden_activation
-        for h in layer_sizes[1:]:
-            model.append(nn.Linear(prev_dim, h, bias = bias))
-            model.append(str_to_activation[hidden_activation])
-            prev_dim = h
-
-        self.model = nn.Sequential(*model).apply(initialize_weights(nn.init.kaiming_uniform_))
-    
-    def forward(self, states, actions):
-        s = self.ll1(states.float())
-        a = self.ll2(actions.float())
-        x = str_to_activation[self.hidden_activation](s + a + self.bias)
-        x = self.model(x)
-
-        output = torch.unsqueeze(torch.sum(x**2, dim=1), dim=1)
-
-        return output
 
 class CAC(object):
     def __init__(self,
@@ -271,12 +131,12 @@ class CAC(object):
         self.labda_optim = torch.optim.Adam([self.log_labda], lr = self.LR_lag)
         self.beta_optim = torch.optim.Adam([self.log_beta], lr = 0.01)
 
-        step_fn = lambda i : 1.0 - (i - 1.)/self.max_global_steps
-        self.actor_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.actor_optim, lr_lambda = step_fn)
-        self.critic_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.critic_optim, lr_lambda = step_fn)
-        self.alpha_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.alpha_optim, lr_lambda = step_fn)
-        self.labda_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.labda_optim, lr_lambda = step_fn)
-        self.beta_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.beta_optim, lr_lambda = step_fn)
+        # step_fn = lambda i : 1.0 - (i - 1.)/self.max_global_steps
+        # self.actor_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.actor_optim, lr_lambda = step_fn)
+        # self.critic_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.critic_optim, lr_lambda = step_fn)
+        # self.alpha_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.alpha_optim, lr_lambda = step_fn)
+        # self.labda_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.labda_optim, lr_lambda = step_fn)
+        # self.beta_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.beta_optim, lr_lambda = step_fn)
 
         self.actor.float()
         self.critic.float()
@@ -290,10 +150,6 @@ class CAC(object):
 
     def learn(self, batch):
 
-        # update target networks
-        soft_update(self.critic_target, self.critic, self.tau)
-        soft_update(self.actor_target, self.actor, self.tau)
-
         bs = torch.tensor(batch['s'], dtype = torch.float).to(self.device)  # state
         ba = torch.tensor(batch['a'], dtype = torch.float).to(self.device)  # action
         br = torch.tensor(batch['r'], dtype = torch.float).to(self.device)  # reward
@@ -305,13 +161,6 @@ class CAC(object):
         # print(bs)
         alpha_loss = None 
         beta_loss = None
-
-        # # alpha learning
-        # if self.adaptive_alpha:
-        #     self.alpha_optim.zero_grad()
-        #     alpha_loss = self.get_alpha_loss(bs, self.target_entropy)
-        #     alpha_loss.backward(retain_graph = False)
-        #     self.alpha_optim.step()
         
         # # beta learning
         # self.beta_optim.zero_grad()        
@@ -322,63 +171,62 @@ class CAC(object):
         # else:
         #     self.beta_optim.zero_grad()
         
-        # # labda learning
-        # self.labda_optim.zero_grad()
-        # labda_loss = self.get_labda_loss(br, bs, bs_, ba)
-        # # print("labda loss = ", labda_loss)
-        # labda_loss.backward(retain_graph = False)
-        # self.labda_optim.step()
-        
-        # actor lerning
-        self.actor_optim.zero_grad()
-        actor_loss = self.get_actor_loss(bs, bs_, ba, br)
-        # print("actor loss = ", actor_loss)
-        actor_loss.backward(retain_graph = True)
-        self.actor_optim.step()
-
+        # lyapunov learning
+        start_grad(self.critic)
         if self.finite_horizon:
             bv = torch.tensor(batch['value'])
             b_r_ = torch.tensor(batch['r_N_'])
-        # lyapunov learning
+        
         self.critic_optim.zero_grad()
-        # print(bs_)
         critic_loss = self.get_lyapunov_loss(bs, bs_, ba, br, b_r_, bv, bterminal)
         critic_loss.backward()
         self.critic_optim.step()
 
+        # actor lerning
+        stop_grad(self.critic)
+        self.actor_optim.zero_grad()
+        actor_loss = self.get_actor_loss(bs, bs_, ba, br)
+        actor_loss.backward(retain_graph = False)
+        self.actor_optim.step()
+        
         # alpha learning
         if self.adaptive_alpha:
             self.alpha_optim.zero_grad()
             alpha_loss = self.get_alpha_loss(bs, self.target_entropy)
             alpha_loss.backward(retain_graph = False)
             self.alpha_optim.step()
-        
+            self.alpha = torch.exp(self.log_alpha)
         # labda learning
         self.labda_optim.zero_grad()
         labda_loss = self.get_labda_loss(br, bs, bs_, ba)
         # print("labda loss = ", labda_loss)
         labda_loss.backward(retain_graph = False)
         self.labda_optim.step()
+        self.labda = torch.clamp(torch.exp(self.log_labda), min = SCALE_lambda_MIN_MAX[0],
+                                max = SCALE_lambda_MIN_MAX[1])
 
+        # update target networks
+        soft_update(self.critic_target, self.critic, self.tau)
+        soft_update(self.actor_target, self.actor, self.tau)
         return alpha_loss, beta_loss, labda_loss, actor_loss, critic_loss
 
     def get_alpha_loss(self, s, target_entropy):
 
         # with torch.no_grad():
         #     _, self.deterministic_a,self.log_pis, _ = self.actor_target(s)
-        log_pis = self.log_pis
+        intermediate = (self.log_pis + target_entropy).detach()
         # self.a, self.deterministic_a, self.log_pis, _ = self.actor(s)
         # print(self.a)
         
-        intermediate = log_pis + target_entropy
-        return -torch.mean(self.log_alpha*intermediate.detach())
+        return -torch.mean(self.log_alpha*intermediate)
     
     def get_labda_loss(self, r, s, s_, a):
         # with torch.no_grad():
         #     l = self.critic(s, a)
         #     lya_a_, _, _, _ = self.actor_target(s_)
         #     self.l_ = self.critic_target(s_, lya_a_)
-        lyapunov_loss = torch.mean(self.l_.detach() - self.l + self.alpha3 * r)
+        l = self.l.detach()
+        lyapunov_loss = torch.mean(self.l_ - l + self.alpha3 * r)
         return -torch.mean(self.log_labda*lyapunov_loss)
 
     def get_beta_loss(self, _s):
@@ -400,31 +248,35 @@ class CAC(object):
         
         # only actor weights are updated!
         _, self.deterministic_a, self.log_pis, _ = self.actor(s)
+        # self.l = self.critic(s, a)
         with torch.no_grad():
-            self.l = self.critic(s, a)
+            # self.l = self.critic(s, a)
             lya_a_, _, _, _ = self.actor(s_)
             self.l_ = self.critic(s_, lya_a_)
-        self.lyapunov_loss = torch.mean(self.l_.detach() - self.l + self.alpha3*r)
-        a_loss = self.labda * self.lyapunov_loss + self.alpha *torch.mean(self.log_pis) - policy_prior_log_probs
+        l = self.l.detach()
+        self.lyapunov_loss = torch.mean(self.l_ - l + self.alpha3*r)
+        labda = self.labda.detach()
+        alpha = self.alpha.detach()
+        a_loss = labda * self.lyapunov_loss + alpha *torch.mean(self.log_pis) - policy_prior_log_probs
         return a_loss
 
     def get_lyapunov_loss(self, s, s_, a, r, r_n_ = None, v = None, terminal = 0.):
         with torch.no_grad():
             a_, _, _,_ = self.actor_target(s_)
             l_ = self.critic_target(s_, a_)
-        l = self.critic(s, a)
+        self.l = self.critic(s, a)
         if self.approx_value:
             if self.finite_horizon:
                 if self.soft_predict_horizon:
-                    l_target = r - r_n_ + l_.detach()
+                    l_target = r - r_n_ + l_
                 else:
                     l_target = v
             else:
-                l_target = r + self.gamma * (1 - terminal)*l_.detach()  # Lyapunov critic - self.alpha * next_log_pis
+                l_target = r + self.gamma * (1 - terminal)*l_  # Lyapunov critic - self.alpha * next_log_pis
         else:
             l_target = r
         mse_loss = nn.MSELoss()
-        l_loss = mse_loss(l, l_target)
+        l_loss = mse_loss(self.l, l_target)
 
         return l_loss
 
@@ -529,9 +381,10 @@ def train(variant):
                         'distance': [],
                         'a_loss': [],
                         'alpha': [],
+                        'labda' : [],
+                        'beta':[],
                         'lyapunov_error': [],
                         'entropy': [],
-                        'beta':[],
                         'action_distance': [],
                         }
 
@@ -561,12 +414,12 @@ def train(variant):
 
         env.state = s
         env.model.state = traj[start_point, -8:]
-        
+
         ep_steps = min(start_point+1+max_ep_steps, len(traj))
         for j in range(start_point+1,ep_steps):
             if Render:
                 env.render()
-            delta = np.zeros(3)
+            delta = np.zeros(s.shape)
             # ###### NOSIE ##############
 
             # noise = np.random.normal(0, 0.01, 0.01)
@@ -582,7 +435,7 @@ def train(variant):
 
 
             a = agent.act(torch.tensor([s]).float())
-            
+
             action = a_lowerbound + (a.detach().numpy() + 1.) * (a_upperbound - a_lowerbound) / 2
             # action = traj[j-1,16]
 
@@ -596,15 +449,12 @@ def train(variant):
             
             r = modify_reward(r, s, s_, variant['reward_id'])
 
-            if j%100 == 0:
-                print("current state: ", s, "true action: ", traj[j, 5], " predicted action: ", action, " and reward : ", r)
-
             env.state = s_
 
             # theta_pre=theta
             if training_started:
                 global_step += 1
-                agent.scheduler_step()
+                # agent.scheduler_step()
 
             if j == max_ep_steps - 1+start_point:
                 done = True
@@ -620,16 +470,20 @@ def train(variant):
                 for _ in range(train_per_cycle):
                     batch = pool.sample(batch_size)
                     alpha_loss, beta_loss, labda_loss, actor_loss, lyapunov_loss = agent.learn(batch)
-                    if j % 200 == 0:
-                        print("labda = ", agent.labda, " | alpha = ", agent.alpha, 
-                            " | l_loss = ", lyapunov_loss , " | entropy = ", agent.log_pis,
-                            " | a_loss = ", actor_loss, " | alpha_loss = ", alpha_loss,
-                            " | labda_loss = ", labda_loss)
+                    if global_step % 200 == 0:
+                        print("labda = ", agent.labda.item(), " | alpha = ", agent.alpha.item(), 
+                            " | l_loss = ", lyapunov_loss.item() , " | constraint loss : ", agent.lyapunov_loss.item(),
+                            " | entropy = ", agent.log_pis.mean().item(),
+                            " | a_loss = ", actor_loss.item(), " | alpha_loss = ", alpha_loss.item(),
+                            " | labda_loss = ", labda_loss.item(), " | lr_a = ", agent.LR_A,
+                            " | lr_l = ", agent.LR_L, " | lr_labda = ", agent.LR_lag, " | log alpha grad = ", agent.log_alpha.grad.item(),
+                            " | log labda grad = ", agent.log_labda.grad.item(), " | predicted_l : ",
+                            agent.l.mean().item(), " | predicted_l_ : ", agent.l_.mean().item())
             if training_started:
                 current_path['rewards'].append(r)
                 current_path['lyapunov_error'].append(lyapunov_loss.detach().numpy())
                 current_path['alpha'].append(agent.alpha.detach().numpy())
-                current_path['entropy'].append(entropy)
+                current_path['entropy'].append(agent.log_pis.mean().detach().cpu().numpy())
                 current_path['a_loss'].append(actor_loss.detach().numpy())
                 current_path['beta'].append(agent.beta.detach().numpy())
                 # current_path['action_distance'].append(action_distance)
@@ -646,7 +500,9 @@ def train(variant):
                     [logger.logkv(key, eval_diagnotic[key]) for key in eval_diagnotic.keys()]
                     training_diagnotic.pop('return')
                     [logger.logkv(key, training_diagnotic[key]) for key in training_diagnotic.keys()]
-
+                    logger.logkv('lr_actor_alpha', agent.LR_A)
+                    logger.logkv('lr_lyapunov', agent.LR_L)
+                    logger.logkv('lr_labda', agent.LR_lag)
                     string_to_print = ['time_step:', str(global_step), '|']
                     [string_to_print.extend([key, ':', str(eval_diagnotic[key]), '|'])
                      for key in eval_diagnotic.keys()]
@@ -713,6 +569,7 @@ def eval(variant):
     mst=[]
     agent_traj=[]
     ground_traj=[]
+    reward_traj = []
 
     for i in tqdm(range(variant['num_data_trajectories'])):
         traj = data_trajectories[i]
@@ -731,17 +588,7 @@ def eval(variant):
         ep_steps = len(traj)
         for j in range(1,ep_steps):
 
-            if agent_traj == []:
-                agent_traj = [s[0]]
-            else:
-                agent_traj = np.concatenate((agent_traj, [s[0]]),axis=0)
-
-            if ground_traj == []:
-                ground_traj = [traj[j-1,1]]
-            else:
-                ground_traj = np.concatenate((ground_traj, [traj[j-1,1]]),axis=0)
-
-            delta = np.zeros(3)
+            delta = np.zeros(s.shape)
             # ###### NOSIE ##############
 
             # noise = np.random.normal(0, 0.001, 16)
@@ -766,13 +613,22 @@ def eval(variant):
             # The new s= current state,next omega, next state
             s_ = np.array([X_[1,0], traj[j, 2], traj[j, 4]])
 
+            if agent_traj == []:
+                agent_traj = [s_[0]]
+            else:
+                agent_traj = np.concatenate((agent_traj, [s_[0]]),axis=0)
+            if ground_traj == []:
+                ground_traj = [s[2]]
+            else:
+                ground_traj = np.concatenate((ground_traj, [s[2]]),axis=0)
             env.state = s_
 
             theta = action
             PLOT_theta_1.append(theta[0])
             PLOT_ground_theta_1.append(traj[j, 5])
             mst.append(np.linalg.norm(traj[j, 5] - theta[0]))
-
+            reward_traj.append(r)
+            
             PLOT_state = np.vstack((PLOT_state, np.array([X_[1,0]])))
 
             logger.logkv('rewards', r)
@@ -803,14 +659,22 @@ def eval(variant):
     with h5py.File(variant['log_path'] + '/' +'GT_track.h5', 'w') as hdf:
          hdf.create_dataset('Data', data=ground_traj)
 
+    fig = plt.figure()
     plt.plot(x, PLOT_theta_1, color='blue', label='Tracking')
     plt.plot(x, PLOT_ground_theta_1, color='black',linestyle='--',label='Ground truth')
-    plt.show()
+    plt.ylim(1000, 8000)
+    plt.savefig(variant['log_path'] + '/action_tracking.jpg')
 
+    fig = plt.figure()
     plt.plot(x, agent_traj, color='blue', label='Tracking')
     plt.plot(x, ground_traj, color='black',linestyle='--',label='Ground truth')
-    plt.show()
+    plt.savefig(variant['log_path'] + '/output_tracking.jpg')
 
+    fig = plt.figure()
+    plt.scatter(np.array(reward_traj), np.square(agent_traj - ground_traj))
+    plt.xlabel("reward")
+    plt.ylabel("error")
+    plt.savefig(variant['log_path'] + '/reward_vs_error.jpg')
     return
 
 def modify_reward(r, s = None, s_ = None, id = 1):
@@ -864,4 +728,3 @@ def modify_reward(r, s = None, s_ = None, id = 1):
             r = -r*20
 
     return r
-

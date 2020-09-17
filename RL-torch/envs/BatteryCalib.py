@@ -1,6 +1,5 @@
 
 """
-@ Yuan : YUTIAN@ETHZ.CH
 @ Ajay : aunagar@ethz.ch
 """
 

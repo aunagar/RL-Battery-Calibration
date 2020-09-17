@@ -789,45 +789,55 @@ def test_code_2():
     B_test.applyDegradation(theta[0])
 
     T2, X2, U2, Z2 = B_test.simulateToThreshold(default_load = U[:,0][0])
-
+    print(max(Z[1] - Z2[1]))
     plt.plot(T2, Z[1], color='red',linestyle='-')
     plt.plot(T2, Z2[1], color='blue', linestyle='-')
     plt.title("Vm")
-    plt.show()
+    plt.savefig("some0.png")
 
 def test_code_3():
     B_test = Battery()
     B_test.reset()
-
-    T1,X1,U1,Z1 = B_test.simulateToThreshold(default_load = 5)
-
-    B_test.reset()
-    B_test.applyDegradation()
-    T2, X2, U2, Z2 = B_test.simulateToThreshold(default_load = 10)
+    cut = 0.05
+    B_test.applyDegradation(7600, 0.12)
+    T1,X1,U1,Z1 = B_test.simulateToThreshold(default_load = 8)
+    l1, h1 = int(cut*X1.shape[1]), int(0.95*X1.shape[1])
 
     B_test.reset()
-    B_test.applyDegradation()
-    T3, X3, U3, Z3 = B_test.simulateToThreshold(default_load = 15)
+    B_test.applyDegradation(7600, 0.14)
+    T2, X2, U2, Z2 = B_test.simulateToThreshold(default_load = 12)
+    l2, h2 = int(0.05*X2.shape[1]), int(0.95*X2.shape[1])
 
     B_test.reset()
-    B_test.applyDegradation()
-    T4, X4, U4, Z4 = B_test.simulateToThreshold(default_load = 20)
+    B_test.applyDegradation(7600, 0.16)
+    T3, X3, U3, Z3 = B_test.simulateToThreshold(default_load = 16)
+    l3, h3 = int(0.05*X3.shape[1]), int(0.95*X3.shape[1])
 
-    plt.plot(T1, Z1[1], color = 'red', linestyle = '-')
-    plt.plot(T2, Z2[1], color = 'blue', linestyle = '-')
-    plt.plot(T3, Z3[1], color = 'yellow', linestyle = '-')
-    plt.plot(T4, Z4[1], color = 'grey', linestyle = '-')
-    plt.show()
+    B_test.reset()
+    B_test.applyDegradation(7600, 0.18)
+    T4, X4, U4, Z4 = B_test.simulateToThreshold(default_load = 16)
+    l4, h4 = int(0.05*X4.shape[1]), int(0.95*X4.shape[1])
+
+    # plt.plot(T1, Z1[1], color = 'red', linestyle = '-')
+    # plt.plot(T2, Z2[1], color = 'blue', linestyle = '-')
+    # plt.plot(T3, Z3[1], color = 'yellow', linestyle = '-')
+    # plt.plot(T4, Z4[1], color = 'grey', linestyle = '-')
+    plt.plot(T1[l1:h1], Z1[1][l1:h1], color = 'red', linestyle = '-')
+    plt.plot(T2[l2:h2], Z2[1][l2:h2], color = 'blue', linestyle = '-')
+    plt.plot(T3[l3:h3], Z3[1][l3:h3], color = 'yellow', linestyle = '-')
+    plt.plot(T4[l4:h4], Z4[1][l4:h4], color = 'grey', linestyle = '-')
+    plt.savefig("test35.png")
 
 def data_load():
-
-    data_sample = np.load("data_sample.npz", allow_pickle = True)
-    X = data_sample['X'][100]
-    Z = data_sample['Z'][100]
-    U = data_sample['U'][100]
-    theta = data_sample['theta'][100]
+    traj_id = 6
+    data_sample = np.load("data_15_trajectories_uniform_load_8_16_uniform_q_3000_7000_dt_1_short.npz", allow_pickle = True)
+    X = data_sample['X'][traj_id]
+    Z = data_sample['Z'][traj_id]
+    U = data_sample['U'][traj_id]
+    theta = data_sample['theta'][traj_id]
 
     return X.T, U.T, Z.T, theta
+
 def RL_test():
     # Create battery model
     battery = BatteryCalib()
@@ -878,7 +888,7 @@ def RL_test():
     plt.title("Vm")
     plt.xlim(0, 1600)
     plt.ylim(min(np.concatenate([Z2,Z[1]])), max(np.concatenate([Z2,Z[1]])))
-    plt.show()
+    plt.savefig("test.png")
 
 if __name__ == '__main__':
     # test_code()

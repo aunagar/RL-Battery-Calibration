@@ -1,10 +1,12 @@
-import tensorflow as tf
+import torch
 import os
+import sys
 import json
 from variant import VARIANT, get_env_from_name,  get_train, get_eval
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# tf.reset_default_graph()
+
+sys.path.append("source/")
 
 if __name__ == '__main__':
     root_dir = VARIANT['log_path']
