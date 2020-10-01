@@ -776,6 +776,7 @@ def data_load():
     theta = data_sample['theta'][155]
 
     return X.T, U.T, Z.T, theta
+
 def RL_test():
     # Create battery model
     battery = BatteryCalib()

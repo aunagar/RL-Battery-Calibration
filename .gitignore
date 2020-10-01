@@ -148,3 +148,7 @@ RL-torch/log/
 lsf*
 *.npz
 RL/requirements.txt
+*.pt
+*.png
+*.jpg
+*.jpeg

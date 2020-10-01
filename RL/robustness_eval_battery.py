@@ -13,9 +13,10 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from variant import VARIANT
 
+DATAPATH = "/cluster/scratch/aunagar/RL-data/"
 def get_data():
     process = VARIANT['dataset_name']
-    data = np.load('data/' + process, allow_pickle = True)
+    data = np.load(DATAPATH + process, allow_pickle = True)
     state_orig = data['X']
     X_orig = data['Z']
     W_orig = data['U']
@@ -53,6 +54,9 @@ def training_evaluation(variant, env, policy):
 
     die_count = 0
     seed_average_cost = []
+
+    traj_ids = np.random.choice(len(data_trajectories), variant['store_last_n_paths'], replace = False)
+    
     for i in range(variant['store_last_n_paths']):
 
         cost = 0

@@ -1,6 +1,7 @@
 import numpy as np
 from collections import OrderedDict
 import matplotlib.pyplot as plt
+import seaborn as sns
 import copy
 import torch
 import random
@@ -94,4 +95,39 @@ def hard_update(target, source):
 def stop_grad(network):
     for param in network.parameters():
         param.requires_grad = False
+
+class StateStorage(object):
+
+    def __init__(self):
+        self.state_dict = dict()
+        self.state_size = None
     
+    def update(self, predicted_state, original_state):
+        assert len(predicted_state) == len(original_state)
+
+        if not self.state_dict:
+            self.state_size = len(predicted_state)
+            for i in range(len(predicted_state)):
+                self.state_dict['s{}'.format(i)] = {'predicted' : [predicted_state[i]],
+                                                    'ground_truth':[original_state[i]]}
+        else:
+            for i in range(len(predicted_state)):
+                self.state_dict['s{}'.format(i)]['predicted'].append(predicted_state[i])
+                self.state_dict['s{}'.format(i)]['ground_truth'].append(original_state[i])
+
+    def plot_states(self, outpath = ""):
+        assert self.state_size, "Nothing is stored in the state storage yet!"
+        plt.style.use('seaborn')
+        for i in range(self.state_size):
+            predicted_traj = self.state_dict['s{}'.format(i)]['predicted']
+            ground_traj = self.state_dict['s{}'.format(i)]['ground_truth']
+            x = np.linspace(0, len(predicted_traj)-1, len(predicted_traj))
+            fig = plt.figure()
+            plt.plot(x, predicted_traj, linestyle = '', color='blue', label='Tracking', marker = 'o', markersize = 1)
+            plt.plot(x, ground_traj, color = 'orange', linestyle = '', label='Ground Truth', marker = '.', markersize = 3)
+            plt.xlabel('time')
+            plt.ylabel('state{}'.format(i))
+            plt.legend(loc="upper right", markerscale=3., scatterpoints=1, fontsize=10)
+            plt.savefig(outpath + '/state{}_tracking.jpg'.format(i))
+        
+        

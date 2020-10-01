@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import time
 from .squash_bijector import SquashBijector
-from .utils import evaluate_training_rollouts
+from .utils import evaluate_training_rollouts, StateStorage
 import tensorflow_probability as tfp
 from collections import OrderedDict, deque
 import os
@@ -27,9 +27,11 @@ SCALE_beta_MIN_MAX = (0, 1)
 SCALE_alpha_MIN_MAX = (0.01, 1)
 import time
 
+DATAPATH = "/cluster/scratch/aunagar/RL-data/"
+
 def get_data():
     process = VARIANT['dataset_name']
-    data = np.load('data/' + process, allow_pickle = True)
+    data = np.load(DATAPATH + process, allow_pickle = True)
     state_orig = data['X']
     X_orig = data['Z']
     W_orig = data['U']
@@ -40,7 +42,7 @@ def get_data():
     X_ = [x[1:, :] for x in X_orig]
     W = [w[:-1,:] for w in W_orig]
     T = [t.reshape(-1,2)[:-1,:] for t in T_orig]
-    print(T)
+    # print(T)
     train_frac = 1.0
     data_stack = [np.concatenate((X[i], W[i], X_[i], T[i], state[i]), axis = -1) for i in range(int(train_frac*len(X)))]
     return data_stack
@@ -617,7 +619,8 @@ def train(variant):
     return
 
 def eval(variant):
-    num_data_traj = variant['num_data_trajectories']
+    # num_data_traj = variant['num_data_trajectories']
+    num_data_traj = 50
     env_name = variant['env_name']
     data_trajectories=get_data()
     env = get_env_from_name(env_name)
@@ -644,13 +647,18 @@ def eval(variant):
     PLOT_ground_theta_1 = []
     PLOT_theta_2 = []
     PLOT_ground_theta_2 = []
+    state_storage = StateStorage()
     mst=[]
     agent_traj=[]
     ground_traj=[]
 
     reward_traj = []
     for i in tqdm(range(num_data_traj)):
-        traj = data_trajectories[i]
+        if (i >= 10):
+            break
+        j = i*len(data_trajectories)//num_data_traj
+        print(j)
+        traj = data_trajectories[j]
 
         env.reset()
         cost = 0
@@ -660,7 +668,7 @@ def eval(variant):
         # PLOT_state = np.array([s])
         # s = np.array([s, traj[0, 2], traj[0, 4]])
         s = np.array(list(s) + [traj[0,2]] + list(traj[1,-8:]))
-        print("initial state : ", s)
+        # print("initial state : ", s)
         print("action here is : ", [traj[0,5], traj[0,6]])
         env.state = s
         env.model.state = traj[0, -8:]
@@ -731,13 +739,13 @@ def eval(variant):
                 # ground_traj = np.concatenate((ground_traj, [s[2]]),axis=0)
                 ground_traj = np.concatenate((ground_traj, [traj[j,1]]), axis = 0)
             env.state = s_
-
             theta = action
             PLOT_theta_1.append(theta[0])
             PLOT_ground_theta_1.append(traj[j, 5])
             PLOT_theta_2.append(theta[1])
             PLOT_ground_theta_2.append(traj[j, 6])
             mst.append(np.linalg.norm(traj[j, 5] - theta[0]))
+            state_storage.update(predicted_state = s_[:8], original_state = s[-8:])
             reward_traj.append(r)
 
             # PLOT_state = np.vstack((PLOT_state, np.array([X_[1,0]])))
@@ -766,8 +774,7 @@ def eval(variant):
     # plt.plot(x, PLOT_theta_1, color='blue', label='Tracking')
     # plt.plot(x, PLOT_ground_theta_1, color='black', linestyle='--', label='Ground truth')
     # plt.show()
-
-    fig = plt.figure()
+    plt.style.use('seaborn')
     with h5py.File(variant['log_path'] + '/' +'CAC_theta.h5', 'w') as hdf:
          hdf.create_dataset('Data', data=PLOT_theta_1)
     with h5py.File(variant['log_path'] + '/' +'Normal_theta_ground.h5', 'w') as hdf:
@@ -777,28 +784,42 @@ def eval(variant):
     with h5py.File(variant['log_path'] + '/' +'GT_track.h5', 'w') as hdf:
          hdf.create_dataset('Data', data=ground_traj)
 
-    plt.plot(x, PLOT_theta_1, color='blue', label='Tracking')
-    plt.plot(x, PLOT_ground_theta_1, color='black',linestyle='--',label='Ground truth')
-    # plt.ylim(1000, 8000)
+    fig = plt.figure()
+    plt.plot(x, PLOT_theta_1, linestyle = '--', color='blue', label='Tracking', marker = 'o', markersize = 1)
+    plt.plot(x, PLOT_ground_theta_1, color='orange',linestyle='--',label='Ground truth', marker = '.', markersize = 3)
     plt.ylim(2000, 8000)
+    plt.xlabel('time')
+    plt.ylabel('Qmax')
+    plt.legend(loc="upper right", markerscale=3., scatterpoints=1, fontsize=10)
     plt.savefig(variant['log_path'] + '/action_tracking_1.jpg')
 
-    plt.plot(x, PLOT_theta_2, color='blue', label='Tracking')
-    plt.plot(x, PLOT_ground_theta_2, color = 'black', linestyle = '--', label='Ground Truth')
+    fig = plt.figure()
+    plt.plot(x, PLOT_theta_2, linestyle = '--', color='blue', label='Tracking', marker = 'o', markersize = 1)
+    plt.plot(x, PLOT_ground_theta_2, color = 'orange', linestyle = '--', label='Ground Truth', marker = '.', markersize = 3)
     plt.ylim(0.10, 0.20)
+    plt.xlabel('time')
+    plt.ylabel('Ro')
+    plt.legend(loc="upper right", markerscale=3., scatterpoints=1, fontsize=10)
     plt.savefig(variant['log_path'] + '/action_tracking_2.jpg')
 
 
     fig = plt.figure()
-    plt.plot(x, agent_traj, color='blue', label='Tracking')
-    plt.plot(x, ground_traj, color='black',linestyle='--',label='Ground truth')
+    plt.plot(x, agent_traj, linestyle = '--', color='blue', label='Tracking', marker = 'o', markersize = 1)
+    plt.plot(x, ground_traj, color = 'orange', linestyle = '--', label='Ground Truth', marker = '.', markersize = 3)
+    plt.xlabel('time')
+    plt.ylabel('Voltage (V)')
+    plt.legend(loc="upper right", markerscale=3., scatterpoints=1, fontsize=10)
     plt.savefig(variant['log_path'] + '/output_tracking.jpg')
 
     fig = plt.figure()
+    plt.plot( np.array(reward_traj), np.square(agent_traj - ground_traj), linestyle='', marker='.', markersize=3)
     plt.scatter(np.array(reward_traj), np.square(agent_traj - ground_traj))
     plt.xlabel("reward")
     plt.ylabel("error")
+    plt.legend(loc="upper right", markerscale=3., scatterpoints=1, fontsize=10)
     plt.savefig(variant['log_path'] + '/reward_vs_error.jpg')
+
+    state_storage.plot_states(outpath = variant['log_path'])
     return
 
 def modify_reward(r, s = None, s_ = None, id = 1):

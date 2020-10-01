@@ -9,17 +9,17 @@ from tqdm import tqdm
 SEED = 20
 np.random.seed(SEED)
 
-LOAD_MIN = 8
+LOAD_MIN = 14
 LOAD_MAX = 16
-load_breaks = 101
+load_breaks = 3
 
 qMOBILE_MIN = 4000
 qMOBILE_MAX = 7000
-q_breaks = 501
+q_breaks = 101
 
-Ro_min = 0.117215
-Ro_max = 0.117215
-r_breaks = 1
+Ro_min = 0.1
+Ro_max = 0.2
+r_breaks = 101
 def generate_data():
 	b = Battery()
 	X = []
@@ -33,7 +33,7 @@ def generate_data():
 			qMobile = qMOBILE_MIN + q*(qMOBILE_MAX - qMOBILE_MIN)/(q_breaks-1)
 			for r in range(r_breaks):
 				num_traj += 1
-				Ro = Ro_min + r*(Ro_max - Ro_min)/(r_breaks)
+				Ro = Ro_min + r*(Ro_max - Ro_min)/(r_breaks-1)
 				print("load is ", load, " and qMobile is ", qMobile, " and Ro is ", Ro)
 				b.reset()
 				b.applyDegradation(qMobile = qMobile, Ro = Ro)
@@ -42,13 +42,13 @@ def generate_data():
 
 				# t = np.array([qMobile]*len(Ti))
 				t = np.array([[qMobile,Ro]]*len(Ti))
-				print("Initial Xi: ", Xi[:,0])
-				print("Xi", Xi.shape)
-				print("Ui", Ui.shape)
-				print("Zi", Zi.shape)
+				# print("Initial Xi: ", Xi[:,0])
+				# print("Xi", Xi.shape)
+				# print("Ui", Ui.shape)
+				# print("Zi", Zi.shape)
 
 				l, h = int(0.05*Xi.shape[1]), int(0.95*Xi.shape[1])
-				print(l, h)
+				print("traj length = ",h-l)
 				X.append(Xi[:,l:h].T)
 				U.append(Ui[:,l:h].T)
 				Z.append(Zi[:,l:h].T)
@@ -79,7 +79,7 @@ def generate_data():
 	# data['Z'] = np.array(Z,dtype=object)
 	# data['theta'] = np.array(theta,dtype=object)
 	print("Total number of trajectories = ", num_traj)
-	np.savez("data_{}_trajectories_load_{}_{}_q_{}_{}_R_{}_{}_dt_1_short.npz".format(num_traj,
+	np.savez("/cluster/scratch/aunagar/data_{}_trajectories_load_{}_{}_q_{}_{}_R_{}_{}_dt_1_short.npz".format(num_traj,
 			LOAD_MIN, LOAD_MAX, qMOBILE_MIN, qMOBILE_MAX, Ro_min, Ro_max), 
 		X = np.array(X, dtype = object), U = np.array(U, dtype = object),
 		Z = np.array(Z, dtype = object), theta = np.array(theta, dtype = object))

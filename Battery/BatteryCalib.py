@@ -785,13 +785,15 @@ def test_code_2():
 
     B_test = Battery()
     B_test.reset()
-
-    B_test.applyDegradation(theta[0])
+    print(theta[0], U[:,0][0])
+    B_test.applyDegradation(theta[0][0], theta[0][1])
 
     T2, X2, U2, Z2 = B_test.simulateToThreshold(default_load = U[:,0][0])
-    print(max(Z[1] - Z2[1]))
+    T2 = T2[int(0.05*len(Z2[1])) : int(0.95*len(Z2[1]))]
+    Z2 = Z2[1, int(0.05*len(Z2[1])) : int(0.95*len(Z2[1]))]
+    
     plt.plot(T2, Z[1], color='red',linestyle='-')
-    plt.plot(T2, Z2[1], color='blue', linestyle='-')
+    plt.plot(T2, Z2, color='blue', linestyle='-')
     plt.title("Vm")
     plt.savefig("some0.png")
 
@@ -830,11 +832,14 @@ def test_code_3():
 
 def data_load():
     traj_id = 6
-    data_sample = np.load("data_15_trajectories_uniform_load_8_16_uniform_q_3000_7000_dt_1_short.npz", allow_pickle = True)
+    data_sample = np.load("data_5511_trajectories_load_8_16_q_4000_7000_R_0.117215_0.117215_dt_1_short.npz", allow_pickle = True)
+    
     X = data_sample['X'][traj_id]
     Z = data_sample['Z'][traj_id]
     U = data_sample['U'][traj_id]
     theta = data_sample['theta'][traj_id]
+
+    print(X.shape, Z.shape, U.shape)
 
     return X.T, U.T, Z.T, theta
 
@@ -893,8 +898,8 @@ def RL_test():
 if __name__ == '__main__':
     # test_code()
     # RL_test()
-    # test_code_2()
-    test_code_3()
+    test_code_2()
+    # test_code_3()
     # b = Battery()
     # b.reset()
     # b.applyDegradation(7000, b.Ro)

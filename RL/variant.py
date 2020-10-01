@@ -15,10 +15,10 @@ ENV_PARAMS = {
     'BatteryTest' : {
         'max_ep_steps' : int(16),
         'max_global_steps' : int(2000000),
-        'max_episodes' : int(1000000),
+        'max_episodes' : int(5000000),
         'eval_render': False,
-        'action_low' : [5000.,0.10],
-        'action_high' : [8000.,0.20],}
+        'action_low' : [7600.0, 0.08],
+        'action_high' : [7600.0, 0.22],}
 }
 
 ALG_PARAMS = {
@@ -205,9 +205,10 @@ VARIANT = {
     # 'env_name' : 'BatteryCalib',
     # 'dataset_name': 'data_5_trajectories_const_load_8_uniform_q_3000_7000_dt_1_short.npz',
     # 'dataset_name':'data_15_trajectories_uniform_load_8_16_uniform_R_0.12_0.20_dt_1_short.npz',
-    'dataset_name' : 'data_18_trajectories_load_8_16_q_6000_7000_R_0.12_0.18_dt_1_short.npz',
-    'num_data_trajectories':18,
-    'reward_id':1, # 1 to 6,
+    'dataset_name' : 'data_5511_trajectories_load_8_16_q_7600_7600_R_0.1_0.2_dt_1_short.npz',
+    # 'dataset_name' : 'data_18_trajectories_load_8_16_q_6000_7000_R_0.12_0.18_dt_1_short.npz',
+    'num_data_trajectories':5511,
+    'reward_id':2, # 1 to 6,
     'traj_start':"random",
     # 'env_name':'CMAPSS',
     #training prams
@@ -215,8 +216,8 @@ VARIANT = {
     # 'algorithm_name': 'NAC',
      # 'algorithm_name': 'CAC',
     # 'algorithm_name': 'LAC',
-    'additional_description': '-data_18_trajectories_load_8_16_q_6000_7000_R_0.12_0.18_dt_1_reward1-state_short_traj16_bs256_fullstate_{}-{}-{}-{}-{}-{}-{}'.format(
-    #  'additional_description' : '-data_15_traj_uniform_load_8_16_uniform_q_3000_7000_dt_1_reward-new2_short_traj16_bs256_fullstate_{}-{}-{}-{}-{}-{}-{}'.format(
+    'additional_description': '-data_5511_trajectories_load_8_16_q_7600_7600_R_0.1_0.2_dt_1_reward2_short_traj16_bs256_fullstate_{}-{}-{}-{}-{}-{}-{}'.format(
+    # 'additional_description' : '-data_18_trajectories_load_8_16_q_6000_7000_R_0.12_0.18_dt_1_reward1-state_short_traj16_bs256_fullstate_{}-{}-{}-{}-{}-{}-{}'.format(
     #  'additional_description' : '-data_5_traj_const_load_8_uniform_q_3000_7000_dt_1_reward6_short_fulltraj_{}-{}-{}-{}-{}-{}-{}'.format(
                                 ALG_PARAMS['CAC_Battery']['labda'],
                                 ALG_PARAMS['CAC_Battery']['alpha'],
@@ -232,14 +233,14 @@ VARIANT = {
     'evaluate' : True,
     'num_of_trials': 1,   # number of random seeds
 
-    'store_last_n_paths': 18,  # number of trajectories for evaluation during training
+    'store_last_n_paths': 50,  # number of trajectories for evaluation during training
     'start_of_trial': 0,
     'eval_list': [
 
     ],
     'trials_for_eval': [str(i) for i in range(0, 10)],
 
-    'evaluation_frequency': 20000,
+    'evaluation_frequency': 50000,
 }
 
 VARIANT['log_path']='/'.join(['./log', VARIANT['env_name'], VARIANT['algorithm_name'] + VARIANT['additional_description']])
